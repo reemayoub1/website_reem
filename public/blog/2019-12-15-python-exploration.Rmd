@@ -1,0 +1,28 @@
+---
+title: 'Python Exploration '
+author: Reem Ayoub
+date: '2019-12-15'
+slug: python-exploration
+categories: []
+tags: []
+description: ''
+---
+
+During this semester we got to experiment with the bio python functions on python. Having worked in neurology labs that analyze DNA sequences, I found these tools especially helpful to learn. One such function we experimented with was creating a dictionary containing 3mers in a DNA string. 
+
+```{Python}
+my_seq1 = "ATCATCATG"
+my_seq2 = "CAGCCCAATCAGGCTCTACTGCCACTAAACTTACGCAGGATATATTTACGCCGACGTACT"
+
+def kmer_count(seq, k):
+    f = {}
+    for x in range(len(seq)+1-k):
+        kmer = seq[x:x+k]
+        f[kmer] = f.get(kmer, 0) + 1
+    return(f)
+
+kmer_count(my_seq1,3)
+
+```
+
+![](/blog/2019-12-15-python-exploration_files/Screen Shot 2019-12-15 at 1.37.46 PM.png){width=60% height=60%}

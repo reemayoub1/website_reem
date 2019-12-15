@@ -1,0 +1,280 @@
+---
+title: 'Reem Project 1: Exploratory Data Analysis'
+author: "SDS348 Fall 2019"
+date: "9/16/2019"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+
+
+<div id="data-wrangling-and-data-exploration" class="section level2">
+<h2>Data Wrangling and Data Exploration</h2>
+<div id="introduction" class="section level3">
+<h3>Introduction</h3>
+<p>For this project, I decided to look at two datasets obtained from the Toronto Police Data Portal. The first data set looks at the type of hommicides reported in different neighbourhoods in the greater Toronto area between 2004 and 2018. These types include shooting, stabbings and other. The second data set compares the counts for Assault, Auto Theft, Break and Enter, Robbery, and Theft Over by Neighbourhoods in in the Toronto Area between 2014 and 2018. For this project, I was interested in trying to see if there was a way to predict instances of crime, or a way to predict the likely hood of a homicide through observing the overall trend of crime in an area. Through comparing the data sets, I expected to see a higher occurence of homicide in areas where assault cases were higher, and where higher crime incidences were reported. The first step in processing the data, was to tidy the data in order to allow for easier comparisson. In the original crime incidence data set, years and crime type were recorded together within the same column. Through using the pivot_longer function, these were separated in order to count the number of crime incidence that occured per year.</p>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>## 
+## Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>## The following objects are masked from &#39;package:stats&#39;:
+## 
+##     filter, lag</code></pre>
+<pre><code>## The following objects are masked from &#39;package:base&#39;:
+## 
+##     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>## ── Attaching packages ──────────────────────────────────────────────────────────────────── tidyverse 1.2.1 ──</code></pre>
+<pre><code>## ✔ ggplot2 3.2.1          ✔ readr   1.3.1     
+## ✔ tibble  2.1.3          ✔ purrr   0.3.2     
+## ✔ tidyr   1.0.0.9000     ✔ stringr 1.4.0     
+## ✔ ggplot2 3.2.1          ✔ forcats 0.4.0</code></pre>
+<pre><code>## ── Conflicts ─────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+## ✖ dplyr::filter() masks stats::filter()
+## ✖ dplyr::lag()    masks stats::lag()</code></pre>
+<pre class="r"><code>rate &lt;- read.csv(&quot;neighbourhood_crime_rate.csv&quot;)
+crime &lt;-  rate %&gt;% pivot_longer(contains(&quot;_&quot;)) %&gt;% separate(name, into = c(&quot;type&quot;, &quot;year&quot;)) %&gt;% pivot_wider(names_from = &quot;type&quot;, values_from = &quot;value&quot;)
+crime&lt;- na.omit(crime)</code></pre>
+<p>The homicide data frame was also tidied through the use of the filter function and the pivot_wider function. The homicide data frame contained data since 2004. To allow for proper murging of the dataframes, it was needed to filter the homicide data so that it only included reports after 2013. Once both datasets were tidied, they were joined through using a full_join. I used a full join, as I wanted all the original data to be retained in the joint dataset.</p>
+<pre class="r"><code>Homicide &lt;- read.csv(&quot;Homicide.csv&quot;)
+cols.dont.want &lt;- &quot;Occurrence_Date&quot;
+Homicide &lt;- Homicide[, ! names(Homicide) %in% cols.dont.want, drop = F]
+
+
+Homi &lt;- Homicide %&gt;%  filter(year &gt; 2013) %&gt;%group_by(Neighbourhood) %&gt;% dplyr::count(Neighbourhood, Homicide_Type)%&gt;%pivot_wider(names_from = &quot;Homicide_Type&quot;, values_from = &quot;n&quot;)%&gt;%mutate_if(is.numeric, ~replace(., is.na(.), 0))</code></pre>
+<pre><code>## `mutate_if()` ignored the following grouping variables:
+## Column `Neighbourhood`</code></pre>
+<pre class="r"><code>crimeVhomic &lt;- full_join(crime, Homi, by =(&quot;Neighbourhood&quot;))%&gt;%mutate_if(is.numeric, ~replace(., is.na(.), 0))</code></pre>
+<pre><code>## Warning: Column `Neighbourhood` joining factors with different levels, coercing
+## to character vector</code></pre>
+<p>Before comparing the data I wanted to summarize how many incidence of each type of crime were recorded throughout the years among all neighbourhoods. Through using summarize_all, I found that assults were the highest occuring crime, while homicides were the lowest occuring crime. I also used a summarize_if function, to determine which Neighbourhood had the highest total number of reported crimes. I found that Black Creek had the highest number of total crimes, with 6308 incidents reported.</p>
+<pre class="r"><code>crimeVhomic%&gt;%select(Assault,AutoTheft,BreakandEnter,Robbery,TheftOver,Homicide) %&gt;%summarize_all(n_distinct)</code></pre>
+<pre><code>## # A tibble: 1 x 6
+##   Assault AutoTheft BreakandEnter Robbery TheftOver Homicide
+##     &lt;int&gt;     &lt;int&gt;         &lt;int&gt;   &lt;int&gt;     &lt;int&gt;    &lt;int&gt;
+## 1     275        93           136      98        50        7</code></pre>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(Neighbourhood)%&gt;%mutate(tot_crime = (cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide)))%&gt;%select(tot_crime,Neighbourhood)%&gt;%summarize_if(is.numeric, list(max=max), na.rm=T)%&gt;%arrange(desc(max))</code></pre>
+<pre><code>## # A tibble: 237 x 2
+##    Neighbourhood                      max
+##    &lt;chr&gt;                            &lt;dbl&gt;
+##  1 Black Creek                       6308
+##  2 Cliffcrest                        5676
+##  3 Ionview                           4338
+##  4 Palmerston-Little Italy           3610
+##  5 Willowridge-Martingrove-Richview  3567
+##  6 The Beaches                       3263
+##  7 Centennial Scarborough            3159
+##  8 Scarborough Village               3149
+##  9 Bathurst Manor                    2974
+## 10 Rexdale-Kipling                   2909
+## # … with 227 more rows</code></pre>
+<p>Through observing that homicide was the lowest occuring crime, and that assult was the highest occuring crime, I wanted to determine what percentage of all reported crime each accounted for. Through using a mutation function, I generated two new variables called perc_hom and perc_assue which indicated the percentage of the total reported crimes that were homicides or assults. These variables were grouped by year and Neighbourhoods.</p>
+<pre class="r"><code>perc_hom &lt;- crimeVhomic %&gt;% group_by(year, Neighbourhood) %&gt;% mutate(perc_hom = cumsum(Homicide)/(cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide))*100)%&gt;%select(year, perc_hom,Neighbourhood)
+
+crimeVhomic &lt;- left_join(crimeVhomic, perc_hom)</code></pre>
+<pre><code>## Joining, by = c(&quot;Neighbourhood&quot;, &quot;year&quot;)</code></pre>
+<pre class="r"><code>crimeVhomic&lt;- na.omit(crimeVhomic)
+
+perc_assu &lt;- crimeVhomic %&gt;% group_by(year, Neighbourhood) %&gt;% mutate(perc_assu = cumsum(Assault)/(cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide))*100)%&gt;%select(year, perc_assu, Neighbourhood)
+
+crimeVhomic &lt;- left_join(crimeVhomic, perc_assu)</code></pre>
+<pre><code>## Joining, by = c(&quot;Neighbourhood&quot;, &quot;year&quot;)</code></pre>
+<pre class="r"><code>crimeVhomic&lt;- na.omit(crimeVhomic)</code></pre>
+<p>Through summarising these new variable, and grouping by year, it was found that in 2018 homicide had its highest average percent contribution to the overall crime with 0.467% of all crimes being homicide. As well in 2016, the count of assults had its highest average percent contribution to the overall crime with 53.32% of all crimes being assults. It was also found, through using a mutate function, that 2018 had the highest number of recorded crimes, with a total of 36263 crimes reported.</p>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(year)%&gt;%summarise(mean(perc_hom))</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   year  `mean(perc_hom)`
+##   &lt;chr&gt;            &lt;dbl&gt;
+## 1 2014             0.271
+## 2 2015             0.319
+## 3 2016             0.317
+## 4 2017             0.356
+## 5 2018             0.468</code></pre>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(year)%&gt;%summarise(mean(perc_assu))</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   year  `mean(perc_assu)`
+##   &lt;chr&gt;             &lt;dbl&gt;
+## 1 2014               49.2
+## 2 2015               51.8
+## 3 2016               53.3
+## 4 2017               52.1
+## 5 2018               50.3</code></pre>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(year)%&gt;%mutate(tot_crime = (cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide)))%&gt;%select(tot_crime,year)%&gt;%summarize_if(is.numeric, list(max=max), na.rm=T)%&gt;%arrange(desc(max))</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   year    max
+##   &lt;chr&gt; &lt;dbl&gt;
+## 1 2018  36263
+## 2 2017  34408
+## 3 2016  32783
+## 4 2015  32269
+## 5 2014  31759</code></pre>
+<p>I was interested in comparing what type of hommicide had the greatest occurance. Through using a summary function I found that shootings had the highest occurance with a total of 80 cases recorded. The neighbourhoods with the highest count of homicide related shootings were Downsview-Roding-CFB and Humber Summit.</p>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(Shooting)%&gt;%summarise(n = n())</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   Shooting     n
+##      &lt;dbl&gt; &lt;int&gt;
+## 1        0   661
+## 2        1    15
+## 3        2     5
+## 4        3     5
+## 5        4    10</code></pre>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(Stabbing)%&gt;%summarise(n = n())</code></pre>
+<pre><code>## # A tibble: 3 x 2
+##   Stabbing     n
+##      &lt;dbl&gt; &lt;int&gt;
+## 1        0   686
+## 2        1     5
+## 3        2     5</code></pre>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(Other)%&gt;%summarise(n = n())</code></pre>
+<pre><code>## # A tibble: 4 x 2
+##   Other     n
+##   &lt;dbl&gt; &lt;int&gt;
+## 1     0   676
+## 2     1     5
+## 3     2     5
+## 4     5    10</code></pre>
+<pre class="r"><code>maxi &lt;- crimeVhomic %&gt;% group_by(Neighbourhood) %&gt;% filter(Shooting &gt; 0) %&gt;% count(Shooting)
+glimpse(maxi)</code></pre>
+<pre><code>## Observations: 7
+## Variables: 3
+## Groups: Neighbourhood [7]
+## $ Neighbourhood &lt;chr&gt; &quot;Bendale&quot;, &quot;Dovercourt-Wallace Emerson-Junction&quot;, &quot;Down…
+## $ Shooting      &lt;dbl&gt; 2, 1, 4, 4, 1, 3, 1
+## $ n             &lt;int&gt; 5, 5, 5, 5, 5, 5, 5</code></pre>
+<p>As Black Creek was shown to have the highest recorded occurance of crime overall, I wanted to see what type of crime was occuring. Through the use of a summary function, I found that assult related crimes were the highest occuring. I also found that Black Creek Had the highest count of crime incidents in 2018, with a total of 1579 incidents occuring in 2018.</p>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(Neighbourhood)%&gt;%filter(Neighbourhood == &quot;Black Creek&quot;) %&gt;%select(Assault,AutoTheft, BreakandEnter, Robbery, TheftOver, Homicide)%&gt;%summarize_if(is.numeric, list(max=max), na.rm=T)</code></pre>
+<pre><code>## Adding missing grouping variables: `Neighbourhood`</code></pre>
+<pre><code>## # A tibble: 1 x 7
+##   Neighbourhood Assault_max AutoTheft_max BreakandEnter_m… Robbery_max
+##   &lt;chr&gt;               &lt;dbl&gt;         &lt;dbl&gt;            &lt;dbl&gt;       &lt;dbl&gt;
+## 1 Black Creek          1005            79              230         224
+## # … with 2 more variables: TheftOver_max &lt;dbl&gt;, Homicide_max &lt;dbl&gt;</code></pre>
+<pre class="r"><code>crimeVhomic%&gt;%group_by(year)%&gt;%filter(Neighbourhood == &quot;Black Creek&quot;) %&gt;%mutate(tot_crime = (cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide)))%&gt;%select(tot_crime, year)%&gt;%summarize_if(is.numeric, list(max=max), na.rm=T)</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   year    max
+##   &lt;chr&gt; &lt;dbl&gt;
+## 1 2014   1020
+## 2 2015   1105
+## 3 2016   1153
+## 4 2017   1451
+## 5 2018   1579</code></pre>
+</div>
+</div>
+<div id="visualizing-data" class="section level2">
+<h2>Visualizing Data</h2>
+<pre class="r"><code>library(ggplot2)
+library(cluster)
+
+ggplot(subset(crimeVhomic, Assault&gt; 400), aes(year, Assault, color=Neighbourhood))+geom_point(size=4)+ggtitle(&quot;Assults per year for 9 Neighbourhoods in Toronto&quot;) + theme_dark()</code></pre>
+<p><img src="/Project1_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>After observing the amounts of assaults per neighbourhood, I wanted to visualize if there was a discrete gap between neighbourhoods with the highest occurance of assaults. In order to try and illustrate this finding, I created a subset of the data that only observed neighbourhoods with over 400 assult cases between 2014-2018. From observing the plot, it can be seen that there is a large gap between the two highest assult prevelant cities (Black CreeK, and Cliffcrest) compared to other high crime cities. This could indicate that crime in Toronto could be limited to only a small percentage of the total 140 neighbourhoods in canada.</p>
+<pre class="r"><code>install.packages(&quot;ggthemes&quot;)</code></pre>
+<pre><code>## Installing package into &#39;/stor/home/ra35556/R/x86_64-pc-linux-gnu-library/3.4&#39;
+## (as &#39;lib&#39; is unspecified)</code></pre>
+<pre class="r"><code>library(ggthemes)
+ggplot(subset(crimeVhomic, Assault&gt; 400), aes(Homicide, Assault, color=Neighbourhood))+geom_point(size=4)+ggtitle(&quot;Assults and Homicides per Year for 9 Neighbourhoods in Toronto&quot;)+ theme_stata()</code></pre>
+<p><img src="/Project1_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
+<pre class="r"><code>ggplot(subset(crimeVhomic, Homicide&gt; 3), aes(Homicide, Assault, color=Neighbourhood))+geom_point(size=4)+ggtitle(&quot;Assults and Homicides per Yearfor 8 Neighbourhoods in Toronto&quot;)+ theme_stata()</code></pre>
+<p><img src="/Project1_files/figure-html/unnamed-chunk-9-2.png" width="672" /> Through the data sets I chose, I wanted to see if it was possible to predict the likelyhood of a crime occuring through observing the trend of crimes recorded. For this exploration tried to see if I could visualize a relationship between Homicide occurance and the Assult occurance. For the plots produced, I first compared the instances of homicide occurance in the Neighbourhoods with the highest assault rate, and then the instances of assult occurance in the Neighbourhoods with the highest homicide rates. Overall, through the plots it was not clear whether a relationship between these two variables existed. While some neighbourhoods had both high homicide and assult counts, there was not observable link between the two.</p>
+<pre class="r"><code>pca &lt;- crimeVhomic%&gt;%select_if(is.numeric)%&gt;%scale
+ch_pca &lt;- princomp(pca)
+summary(ch_pca, loadings=T)</code></pre>
+<pre><code>## Importance of components:
+##                           Comp.1    Comp.2    Comp.3    Comp.4     Comp.5
+## Standard deviation     1.8950829 1.3736148 1.2588360 1.1353830 1.01347582
+## Proportion of Variance 0.2997089 0.1574610 0.1322457 0.1075791 0.08571759
+## Cumulative Proportion  0.2997089 0.4571699 0.5894156 0.6969947 0.78271230
+##                            Comp.6     Comp.7     Comp.8     Comp.9    Comp.10
+## Standard deviation     0.84518783 0.76837520 0.72960139 0.59760861 0.42948400
+## Proportion of Variance 0.05961419 0.04927083 0.04442368 0.02980416 0.01539349
+## Cumulative Proportion  0.84232649 0.89159732 0.93602100 0.96582516 0.98121865
+##                           Comp.11     Comp.12
+## Standard deviation     0.39657507 0.260347008
+## Proportion of Variance 0.01312484 0.005656508
+## Cumulative Proportion  0.99434349 1.000000000
+## 
+## Loadings:
+##               Comp.1 Comp.2 Comp.3 Comp.4 Comp.5 Comp.6 Comp.7 Comp.8 Comp.9
+## ID                           0.179         0.913  0.208         0.277       
+## Assault        0.481                0.286                                   
+## AutoTheft      0.299  0.134        -0.476  0.153 -0.157 -0.490 -0.522 -0.112
+## BreakandEnter  0.454                                     0.313  0.330  0.245
+## Robbery        0.451                0.155                             -0.749
+## TheftOver      0.457  0.108        -0.168                              0.542
+## Homicide              0.568 -0.374  0.226                                   
+## Other                 0.372  0.440                0.542  0.385 -0.454       
+## Shooting              0.362  0.419 -0.132 -0.327  0.141 -0.550  0.490       
+## Stabbing              0.292  0.468               -0.781  0.270              
+## perc_hom      -0.181  0.505 -0.408  0.172                                   
+## perc_assu      0.121 -0.116  0.234  0.725               -0.360 -0.286  0.254
+##               Comp.10 Comp.11 Comp.12
+## ID                                   
+## Assault                        0.816 
+## AutoTheft      0.156   0.254         
+## BreakandEnter  0.357   0.525  -0.298 
+## Robbery       -0.218  -0.153  -0.355 
+## TheftOver     -0.371  -0.529  -0.173 
+## Homicide       0.569  -0.389         
+## Other                                
+## Shooting                             
+## Stabbing                             
+## perc_hom      -0.571   0.420         
+## perc_assu              0.138  -0.295</code></pre>
+<pre class="r"><code>eigval&lt;-ch_pca$sdev^2
+varprop=round(eigval/sum(eigval),2)
+
+ggplot()+geom_bar(aes(y=varprop,x=1:12),stat=&quot;identity&quot;)+xlab(&quot;&quot;)+geom_path(aes(y=varprop,x=1:12))+
+ geom_text(aes(x=1:12,y=varprop,label=round(varprop,2)),vjust=1,col=&quot;white&quot;,size=5)+
+ scale_y_continuous(breaks=seq(0,.6,.2),labels = scales::percent)+
+ scale_x_continuous(breaks=1:10)</code></pre>
+<p><img src="/Project1_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<pre class="r"><code>round(cumsum(eigval)/sum(eigval),2)</code></pre>
+<pre><code>##  Comp.1  Comp.2  Comp.3  Comp.4  Comp.5  Comp.6  Comp.7  Comp.8  Comp.9 Comp.10 
+##    0.30    0.46    0.59    0.70    0.78    0.84    0.89    0.94    0.97    0.98 
+## Comp.11 Comp.12 
+##    0.99    1.00</code></pre>
+<pre class="r"><code>eigval</code></pre>
+<pre><code>##     Comp.1     Comp.2     Comp.3     Comp.4     Comp.5     Comp.6     Comp.7 
+## 3.59133907 1.88681773 1.58466800 1.28909455 1.02713324 0.71434246 0.59040046 
+##     Comp.8     Comp.9    Comp.10    Comp.11    Comp.12 
+## 0.53231819 0.35713605 0.18445651 0.15727179 0.06778056</code></pre>
+<pre class="r"><code>crimhomdf&lt;-data.frame(PC1=ch_pca$scores[,1], PC2=ch_pca$scores[,2])
+ggplot(crimhomdf,aes(PC1, PC2,))+geom_point()</code></pre>
+<p><img src="/Project1_files/figure-html/unnamed-chunk-10-2.png" width="672" /></p>
+<pre class="r"><code>hood&lt;-crimeVhomic$Neighbourhood
+ch_pca$scores%&gt;%as.data.frame%&gt;%cbind(hood,.)%&gt;%top_n(3,Comp.1)</code></pre>
+<pre><code>##          hood    Comp.1   Comp.2     Comp.3    Comp.4     Comp.5     Comp.6
+## 1  Cliffcrest  9.571651 1.778628 -0.6853535 0.6313205  0.3937883 0.86276598
+## 2 Black Creek 10.007378 1.331389 -0.5399646 2.9560776 -2.1872577 0.38047140
+## 3 Black Creek 11.252995 3.727339 -2.0710268 2.9474057 -1.9429570 0.08131544
+##      Comp.7   Comp.8    Comp.9    Comp.10    Comp.11   Comp.12
+## 1 1.6432238 2.352323  2.155471  0.8431717  1.2646269 0.2650055
+## 2 1.5361895 1.638280 -2.529213 -0.3985933  0.4520106 0.6296845
+## 3 0.8394155 0.683658 -2.602684  0.7233377 -1.3841594 0.6568677</code></pre>
+<pre class="r"><code>ch_pca$scores%&gt;%as.data.frame%&gt;%cbind(hood,.)%&gt;%top_n(3,Comp.2)</code></pre>
+<pre><code>##                                  hood    Comp.1    Comp.2    Comp.3    Comp.4
+## 1 Dovercourt-Wallace Emerson-Junction -1.559944  6.964674  5.540142  1.820130
+## 2                     Willowdale East -3.917155 10.647583 -8.329034  3.831294
+## 3                             Malvern -0.780754  7.984029  3.561783 -1.012900
+##        Comp.5     Comp.6      Comp.7     Comp.8     Comp.9   Comp.10    Comp.11
+## 1  0.07758286  0.5329299  2.84214037 -3.4503825  0.9253777 0.1827629 -0.1055058
+## 2  0.65553660 -0.6821155 -0.47798265 -0.6021432  0.0934805 0.3570382  0.4699553
+## 3 -0.71839674  5.0744266  0.03274001 -1.0731611 -1.7728204 0.7393184 -0.9022914
+##       Comp.12
+## 1 -0.00714856
+## 2 -0.09183246
+## 3 -0.26728972</code></pre>
+<pre class="r"><code>ch_pca$loadings[1:12,1:2]%&gt;%as.data.frame%&gt;%rownames_to_column%&gt;%
+ggplot()+geom_hline(aes(yintercept=0),lty=2)+
+ geom_vline(aes(xintercept=0),lty=2)+ylab(&quot;PC2&quot;)+xlab(&quot;PC1&quot;)+
+ geom_segment(aes(x=0,y=0,xend=Comp.1,yend=Comp.2),arrow=arrow(),col=&quot;red&quot;)+
+ geom_label(aes(x=Comp.1*1.1,y=Comp.2*1.1,label=rowname))</code></pre>
+<p><img src="/Project1_files/figure-html/unnamed-chunk-10-3.png" width="672" /></p>
+<p>Through creating a PCA, we can see what data inputs are correlated with each other. Using a PCA allows for a better visualization of the realtionship between occurance of each crime type. The plot above displays the correlation between PC1 and PC2. Through the plot we can see that there is not a strong correlation between Homicides, and all other categories of crime reported in Toronto.</p>
+<p>Note that the <code>echo = FALSE</code> parameter was added to the code chunk to prevent printing of the R code that generated the plot.</p>
+</div>

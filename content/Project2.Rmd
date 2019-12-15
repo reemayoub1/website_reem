@@ -1,0 +1,288 @@
+---
+title: 'Project 2: Modeling, Testing, and Predicting'
+author: " Reem Ayoub ra35556 "
+date: ''
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,fig.align="center",warning=FALSE,message=FALSE,fig.width=8, fig.height=5, linewidth=60)
+options(tibble.width = 100,width = 100)
+library(tidyverse)
+
+
+class_diag<-function(probs,truth){
+  
+  tab<-table(factor(probs>.5,levels=c("FALSE","TRUE")),truth)
+  acc=sum(diag(tab))/sum(tab)
+  sens=tab[2,2]/colSums(tab)[2]
+  spec=tab[1,1]/colSums(tab)[1]
+  ppv=tab[2,2]/rowSums(tab)[2]
+
+  if(is.numeric(truth)==FALSE & is.logical(truth)==FALSE) truth<-as.numeric(truth)-1
+  
+  #CALCULATE EXACT AUC
+  ord<-order(probs, decreasing=TRUE)
+  probs <- probs[ord]; truth <- truth[ord]
+  
+  TPR=cumsum(truth)/max(1,sum(truth)) 
+  FPR=cumsum(!truth)/max(1,sum(!truth))
+  
+  dup<-c(probs[-1]>=probs[-length(probs)], FALSE)
+  TPR<-c(0,TPR[!dup],1); FPR<-c(0,FPR[!dup],1)
+  
+  n <- length(TPR)
+  auc<- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+
+  data.frame(acc,sens,spec,ppv,auc)
+}
+```
+
+# Modeling
+
+## Introduction:
+
+For this project I decided to look at a data set of the population of Pima Indians in Arizona, and their diagnosis as diabetic or not. The data set includes the variables number of pregnancies (npreg), plasma glucose concentration (glu), diastolic blood pressure (bp), triceps skin fold thickness (skin), body mass index (bmi), diabetes pedigree function (ped), age and the classification as diabetic or not. 
+
+```{R}
+diab <-read.csv("Pima.tr.csv")
+diab<-diab%>%dplyr::select(-`X`)
+```
+
+## MANOVA 
+  Briefly discuss assumptions and whether or not they are likely to have been met (2).
+
+```{R}
+man1<-manova(cbind(npreg,glu,bp,skin,bmi,age,ped)~type, data=diab)
+summary(man1)
+```
+A one-way MANOVA test was conducted to determine the effect of diabetes on the variables npreg, glu, bp, skin, bmi, age and ped. After completing a MANOVA, it was found that at least one of the numeric variables showed a mean difference between diabetic and non diabetic women. This was supported by the calculation of a p value less than 0.05. 
+
+```{R}
+summary.aov(man1)
+diab%>%group_by(type)%>%summarize(mean(npreg),mean(glu),mean(bp),mean(skin),mean(bmi),mean(age),mean(ped))
+pairwise.t.test(diab$npreg,diab$type,
+ p.adj="none")
+pairwise.t.test(diab$glu,diab$type,
+ p.adj="none")
+pairwise.t.test(diab$bp,diab$type,
+ p.adj="none")
+pairwise.t.test(diab$skin,diab$type,
+ p.adj="none")
+pairwise.t.test(diab$bmi,diab$type,
+ p.adj="none")
+pairwise.t.test(diab$age,diab$type,
+ p.adj="none")
+pairwise.t.test(diab$ped,diab$type,
+ p.adj="none")
+
+```
+After compleating an unvaqriate ANOVA, and a post-hoc t test, it was found that all of the variables showed a significant mean difference between diabetic and non diabetic women. A total of 15 tests where done on the data set. The probability of at least one type I error occuring in this case is 0.0033. Through concidering this bonferroni correction, now the variable diabetes pedigree function is no longer significant. The assumptions made in order to conduct a MANOVA were rqndom samples, Homogeneity of within-group covariance matrices, Multivariate normality of DVs and others. As there are many assumptions that need to be met for MANOVA's and ANOVA's, it is not likely that they were all met. 
+
+## Randomization test 
+ In order to get a better understanding of my data, I decided to conduct a randomization test which highlights the difference in mean plasma glucose concentration between women who have diabietes and those who dont. 
+ H0 : mean plasma glucose concentration is the same for women with diabetes vs. without diabetes 
+ HA : mean plasma glucose concentration is different for women with diabetes vs. without diabetes 
+ 
+```{R}
+rand_dist<-vector()
+for(i in 1:5000){
+new<-data.frame(Glucose_Conc=sample(diab$glu),type=diab$type)
+rand_dist[i]<-mean(new[new$type=="Yes",]$Glucose_Conc)-
+ mean(new[new$type=="No",]$Glucose_Conc)}
+mean(rand_dist)*2 
+
+ggplot(diab,aes(glu,fill=type))+geom_histogram(bins=6.5)+facet_wrap(~type,ncol=2)+theme()
+t.test(data=diab,glu~type)
+```
+ 
+Through observing the p-value calculated, the null hypothesis is rejected, There is a difference in the mean plasma glucose concentration for women with diabetes vs. without diabetes. This conclusion is also supported through the observation of the t-test, where the p-value was also less than 0.05. 
+
+## Linear Regression
+
+```{R}
+y <- as.numeric(diab$type == "Yes")
+diab1 <- cbind(diab, y)
+diab1<-diab1%>%dplyr::select(-`type`)
+
+```
+
+
+```{R}
+diab1$npreg <- diab1$npreg - mean(diab1$npreg)
+diab1$glu <- diab1$glu - mean(diab1$glu)
+diab1$age <- diab1$age - mean(diab1$age)
+
+fit<-lm(y~glu*npreg*age,data=diab1)
+summary(fit)
+```
+For the linear Regression, the intercept represents the y component (Diabetes). Through observing the coefficient estimates, it can be seen that there is a possitive correlation between diabetes, and the variables glu, npreg and age. This shows that as glu, npreg, and age increase the incidents of diabetes increase. However there is a negative correlation between the interaction of glu and npreg, glu and age, npreg and age, and the interaction of all three predictors. 
+
+```{R}
+ggplot(diab1, aes(x=glu, y=age,group=y))+geom_point(aes(color=y))+
+ geom_smooth(method="lm",formula=y~1,se=F,fullrange=T,aes(color=y))+
+theme(legend.position=c(.9,.19))+xlab("")
+```
+    
+```{R}
+library(sandwich)
+library(lmtest)
+plot(fit)
+bptest(fit)
+```
+ From observing the plot of the function it can be stated that all assumptions are met. 
+ 
+```{R}
+library(sandwich)
+library(lmtest)
+coeftest(fit, vcov=vcovHC(fit))
+(sum((y-mean(y))^2)-sum(fit$residuals^2))/sum((y-mean(y))^2)
+```
+Through observing the robust standard errods, now only the gly variable gives significant results compared to the first model where age also gave significant results. There are an increase in the std. error for variables with a positive estimate coeficient, and a dectrease in the std. error for variables with a negative estimate coeficient. The model explains 28.4% of the in the outcome. 
+
+```{R} 
+fit1<-lm(y~glu+npreg+age,data=diab1)
+summary(fit1)
+lrtest(fit,fit1)
+lrtest(fit1)
+```
+
+The likelihood-ratio test here shows that the regression without interaction fits the model better than with interactions. 
+    
+## Bootstrap 
+
+```{R} 
+samp_distn<-replicate(5000, {
+ diab_dat<-diab_dat<-diab1[sample(nrow(diab1),replace=TRUE),]
+ fit<-lm(y~glu*npreg*age,data=diab1)
+ coef(fit)
+})
+
+samp_distn%>%t%>%as.data.frame%>%summarize_all(sd)
+```
+
+## Logistic Regression 
+
+```{R} 
+
+fit <- glm(y~., data = diab1, family = "binomial")
+summary(fit)
+prob <- predict(fit,type="response")      
+class_diag(prob, diab1$y)
+table(predict=as.numeric(prob>.5),truth=diab1$y)%>%addmargins
+
+library(plotROC)
+prob <- predict(fit,type="response")  
+ROC1<-ggplot(diab1)+geom_roc(aes(d=y,m=prob), n.cuts=0)
+ROC1
+
+odds<-function(x)x/(1-x)
+x<-seq(0,1,by=.1)
+cbind(x, odds=odds(x))%>%round(4)
+
+logit<-function(x)log(odds(x))
+cbind(x, odds=odds(x),logit=logit(x))%>%round(4)
+
+diab1$logit<-predict(fit) 
+diab1$y<-factor(diab1$y)
+ggplot(diab1,aes(logit, fill=y))+geom_density(alpha=.3)+
+  geom_vline(xintercept=0,lty=2)
+
+```
+Through obsering the coefficients estimates, there is a possitive correlation between age and instance of diabetes, as well as glu and instance of diabetes. The Accuracy, TPR, TNR, and PPV were found to be 0.77, 0.559, 0.8787, and 0.703. This shows a fairly strong fiting of the model. The AUC was also found to be 0.8224 which also shows that the model predics diabetes well overall. 
+ 
+
+    
+```{R} 
+set.seed(1234)
+k=10
+data1<-diab1[sample(nrow(diab1)),]
+folds<-cut(seq(1:nrow(diab1)),breaks=k,labels=FALSE)
+diags<-NULL
+for(i in 1:k){
+ train<-data1[folds!=i,]
+ test<-data1[folds==i,]
+ truth<-test$y
+ fit<-glm(y~age + glu,data=train,family="binomial")
+ probs<-predict(fit,newdata = test,type="response")
+ diags<-rbind(diags,class_diag(probs,truth))
+}
+apply(diags,2,mean)
+
+
+```
+After compleating a 10-fodl CV, the out-of-samply accuracy was found to be  0.755, sensitivity was 0.5473, and AUC was 0.8362. As the AUC value increased, this shows that there was no overfitting in the data set, and that the model fits well. 
+   
+
+##Lasso 
+
+```{r}
+library(glmnet)
+set.seed(1234)
+diab1<-diab1%>%na.omit()
+fit<-glm(y~ -1 + ., data=diab1,family="binomial")
+
+x<-model.matrix(fit)
+y<-as.matrix(diab1$y)
+cv<-cv.glmnet(x,y,family="binomial")
+lasso<-glmnet(x,y,family="binomial",lambda=cv$lambda.1se)
+coef(lasso)
+
+truth <- diab1$y 
+lasso_prob <- predict(lasso, newx=x, type="response")
+table(predicted= lasso_prob >0.5, truth = diab1$y)
+class_diag(lasso_prob, diab1$y)
+
+````
+
+```{R}
+
+lasso_vars <- rownames(coef(lasso))[which(coef(lasso)>0)]
+diab2 <- x %>% as.data.frame %>%select(lasso_vars)%>%mutate(y = diab1$y)
+
+set.seed(1234)
+k=10
+
+data1<-diab2[sample(nrow(diab1)),]
+folds<-cut(seq(1:nrow(diab1)),breaks=k,labels=FALSE)
+
+diags<-NULL
+for(i in 1:k){
+ train<-data1[folds!=i,]
+ test<-data1[folds==i,]
+ truth<-test$y
+ fit<-glm(y~.,data=train,family="binomial")
+ probs<-predict(fit,newdata = test,type="response")
+ preds<- ifelse(probs > 0.5, 1, 0)
+ diags<-rbind(diags,class_diag(probs,truth))
+}
+apply(diags,2,mean)
+````
+After running a LASSO regression, the variables that were retained were npreg, glu, bmi, ped and age. When comparing the  model's out-of-sample accuracy to that of your logistic regression in part 5 it can be seen that there is a decrease in the accuracy value.
+
+...
+
+
+
+
+

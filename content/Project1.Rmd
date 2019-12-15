@@ -1,0 +1,155 @@
+---
+title: 'Reem Project 1: Exploratory Data Analysis'
+author: "SDS348 Fall 2019"
+date: "9/16/2019"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Wrangling and Data Exploration
+
+### Introduction
+
+  For this project, I decided to look at two datasets obtained from the Toronto Police Data Portal. The first data set looks at the type of hommicides reported in different neighbourhoods in the greater Toronto area between 2004 and 2018. These types include shooting, stabbings and other. The second data set compares the counts for Assault, Auto Theft, Break and Enter, Robbery, and Theft Over by Neighbourhoods in in the Toronto Area between 2014 and 2018. For this project, I was interested in trying to see if there was a way to predict instances of crime, or a way to predict the likely hood of a homicide through observing the overall trend of crime in an area. Through comparing the data sets, I expected to see a higher occurence of homicide in areas where assault cases were higher, and where higher crime incidences were reported. 
+  The first step in processing the data, was to tidy the data in order to allow for easier comparisson. In the original crime incidence data set, years and crime type were recorded together within the same column. Through using the pivot_longer function, these were separated in order to count the number of crime incidence that occured per year. 
+
+```{R}
+library(dplyr)
+library(tidyverse)
+rate <- read.csv("neighbourhood_crime_rate.csv")
+crime <-  rate %>% pivot_longer(contains("_")) %>% separate(name, into = c("type", "year")) %>% pivot_wider(names_from = "type", values_from = "value")
+crime<- na.omit(crime)
+```
+
+
+  The homicide data frame was also tidied through the use of the filter function and the pivot_wider function. The homicide data frame contained data since 2004. To allow for proper murging of the dataframes, it was needed to filter the homicide data so that it only included reports after 2013. Once both datasets were tidied, they were joined through using a full_join. I used a full join, as I wanted all the original data to be retained in the joint dataset. 
+```{R}
+Homicide <- read.csv("Homicide.csv")
+cols.dont.want <- "Occurrence_Date"
+Homicide <- Homicide[, ! names(Homicide) %in% cols.dont.want, drop = F]
+
+
+Homi <- Homicide %>%  filter(year > 2013) %>%group_by(Neighbourhood) %>% dplyr::count(Neighbourhood, Homicide_Type)%>%pivot_wider(names_from = "Homicide_Type", values_from = "n")%>%mutate_if(is.numeric, ~replace(., is.na(.), 0))
+ 
+crimeVhomic <- full_join(crime, Homi, by =("Neighbourhood"))%>%mutate_if(is.numeric, ~replace(., is.na(.), 0))
+```
+
+Before comparing the data I wanted to summarize how many incidence of each type of crime were recorded throughout the years among all neighbourhoods. Through using summarize_all, I found that assults were the highest occuring crime, while homicides were the lowest occuring crime. I also used a summarize_if function, to determine which Neighbourhood had the highest total number of reported crimes. I found that Black Creek had the highest number of total crimes, with 6308 incidents reported. 
+```{R}
+crimeVhomic%>%select(Assault,AutoTheft,BreakandEnter,Robbery,TheftOver,Homicide) %>%summarize_all(n_distinct)
+
+crimeVhomic%>%group_by(Neighbourhood)%>%mutate(tot_crime = (cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide)))%>%select(tot_crime,Neighbourhood)%>%summarize_if(is.numeric, list(max=max), na.rm=T)%>%arrange(desc(max))
+
+
+```
+
+Through observing that homicide was the lowest occuring crime, and that assult was the highest occuring crime, I wanted to determine what percentage of all reported crime each accounted for. Through using a mutation function, I generated two new variables called perc_hom and perc_assue which indicated the percentage of the total reported crimes that were homicides or assults. These variables were grouped by year and Neighbourhoods.
+```{R}
+perc_hom <- crimeVhomic %>% group_by(year, Neighbourhood) %>% mutate(perc_hom = cumsum(Homicide)/(cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide))*100)%>%select(year, perc_hom,Neighbourhood)
+
+crimeVhomic <- left_join(crimeVhomic, perc_hom)
+crimeVhomic<- na.omit(crimeVhomic)
+
+perc_assu <- crimeVhomic %>% group_by(year, Neighbourhood) %>% mutate(perc_assu = cumsum(Assault)/(cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide))*100)%>%select(year, perc_assu, Neighbourhood)
+
+crimeVhomic <- left_join(crimeVhomic, perc_assu)
+crimeVhomic<- na.omit(crimeVhomic)
+
+```
+
+Through summarising these new variable, and grouping by year, it was found that in 2018 homicide had its highest average percent contribution to the overall crime with 0.467% of all crimes being homicide. As well in 2016, the count of assults had its highest average percent contribution to the overall crime with 53.32% of all crimes being assults. It was also found, through using a mutate function, that 2018 had the highest number of recorded crimes, with a total of 36263 crimes reported. 
+```{R}
+crimeVhomic%>%group_by(year)%>%summarise(mean(perc_hom))
+crimeVhomic%>%group_by(year)%>%summarise(mean(perc_assu))
+crimeVhomic%>%group_by(year)%>%mutate(tot_crime = (cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide)))%>%select(tot_crime,year)%>%summarize_if(is.numeric, list(max=max), na.rm=T)%>%arrange(desc(max))
+```
+
+I was interested in comparing what type of hommicide had the greatest occurance. Through using a summary function I found that shootings had the highest occurance with a total of 80 cases recorded. The neighbourhoods with the highest count of homicide related shootings were Downsview-Roding-CFB and Humber Summit. 
+```{R}
+
+crimeVhomic%>%group_by(Shooting)%>%summarise(n = n())
+crimeVhomic%>%group_by(Stabbing)%>%summarise(n = n())
+crimeVhomic%>%group_by(Other)%>%summarise(n = n())
+
+maxi <- crimeVhomic %>% group_by(Neighbourhood) %>% filter(Shooting > 0) %>% count(Shooting)
+glimpse(maxi)
+
+```
+  
+
+As Black Creek was shown to have the highest recorded occurance of crime overall, I wanted to see what type of crime was occuring. Through the use of a summary function, I found that assult related crimes were the highest occuring. I also found that Black Creek Had the highest count of crime incidents in 2018, with a total of 1579 incidents occuring in 2018. 
+
+```{R}
+                                                   
+crimeVhomic%>%group_by(Neighbourhood)%>%filter(Neighbourhood == "Black Creek") %>%select(Assault,AutoTheft, BreakandEnter, Robbery, TheftOver, Homicide)%>%summarize_if(is.numeric, list(max=max), na.rm=T)
+
+crimeVhomic%>%group_by(year)%>%filter(Neighbourhood == "Black Creek") %>%mutate(tot_crime = (cumsum(Assault) + cumsum(AutoTheft) + cumsum(BreakandEnter) + cumsum(Robbery) + cumsum(TheftOver) +cumsum(Homicide)))%>%select(tot_crime, year)%>%summarize_if(is.numeric, list(max=max), na.rm=T)
+
+
+```
+
+## Visualizing Data 
+
+
+
+```{R}
+library(ggplot2)
+library(cluster)
+
+ggplot(subset(crimeVhomic, Assault> 400), aes(year, Assault, color=Neighbourhood))+geom_point(size=4)+ggtitle("Assults per year for 9 Neighbourhoods in Toronto") + theme_dark()
+   
+```
+
+After observing the amounts of assaults per neighbourhood, I wanted to visualize if there was a discrete gap between neighbourhoods with the highest occurance of assaults. In order to try and illustrate this finding, I created a subset of the data that only observed neighbourhoods with over 400 assult cases between 2014-2018. From observing the plot, it can be seen that there is a large gap between the two highest assult prevelant cities (Black CreeK, and Cliffcrest) compared to other high crime cities. This could indicate that crime in Toronto could be limited to only a small percentage of the total 140 neighbourhoods in canada. 
+
+```{R}
+install.packages("ggthemes")
+library(ggthemes)
+ggplot(subset(crimeVhomic, Assault> 400), aes(Homicide, Assault, color=Neighbourhood))+geom_point(size=4)+ggtitle("Assults and Homicides per Year for 9 Neighbourhoods in Toronto")+ theme_stata()
+
+ggplot(subset(crimeVhomic, Homicide> 3), aes(Homicide, Assault, color=Neighbourhood))+geom_point(size=4)+ggtitle("Assults and Homicides per Yearfor 8 Neighbourhoods in Toronto")+ theme_stata()
+```
+Through the data sets I chose, I wanted to see if it was possible to predict the likelyhood of a crime occuring through observing the trend of crimes recorded. For this exploration tried to see if I could visualize a relationship between Homicide occurance and the Assult occurance. For the plots produced, I first compared the instances of homicide occurance in the Neighbourhoods with the highest assault rate, and then the instances of assult occurance in the Neighbourhoods with the highest homicide rates. Overall, through the plots it was not clear whether a relationship between these two variables existed. While some neighbourhoods had both high homicide and assult counts, there was not observable link between the two. 
+
+```{R}
+pca <- crimeVhomic%>%select_if(is.numeric)%>%scale
+ch_pca <- princomp(pca)
+summary(ch_pca, loadings=T)
+eigval<-ch_pca$sdev^2
+varprop=round(eigval/sum(eigval),2)
+
+ggplot()+geom_bar(aes(y=varprop,x=1:12),stat="identity")+xlab("")+geom_path(aes(y=varprop,x=1:12))+
+ geom_text(aes(x=1:12,y=varprop,label=round(varprop,2)),vjust=1,col="white",size=5)+
+ scale_y_continuous(breaks=seq(0,.6,.2),labels = scales::percent)+
+ scale_x_continuous(breaks=1:10)
+
+round(cumsum(eigval)/sum(eigval),2)
+eigval
+
+crimhomdf<-data.frame(PC1=ch_pca$scores[,1], PC2=ch_pca$scores[,2])
+ggplot(crimhomdf,aes(PC1, PC2,))+geom_point()
+
+hood<-crimeVhomic$Neighbourhood
+ch_pca$scores%>%as.data.frame%>%cbind(hood,.)%>%top_n(3,Comp.1)
+ch_pca$scores%>%as.data.frame%>%cbind(hood,.)%>%top_n(3,Comp.2)
+
+ch_pca$loadings[1:12,1:2]%>%as.data.frame%>%rownames_to_column%>%
+ggplot()+geom_hline(aes(yintercept=0),lty=2)+
+ geom_vline(aes(xintercept=0),lty=2)+ylab("PC2")+xlab("PC1")+
+ geom_segment(aes(x=0,y=0,xend=Comp.1,yend=Comp.2),arrow=arrow(),col="red")+
+ geom_label(aes(x=Comp.1*1.1,y=Comp.2*1.1,label=rowname))
+```
+
+Through creating a PCA, we can see what data inputs are correlated with each other. Using a PCA allows for a better visualization of the realtionship between occurance of each crime type. The plot above displays the correlation between PC1 and PC2. Through the plot we can see that there is not a strong correlation between Homicides, and all other categories of crime reported in Toronto. 
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

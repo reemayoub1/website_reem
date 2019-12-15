@@ -1,0 +1,37 @@
+baseurl = "reemayoub"
+languageCode = "en-US"
+title = "Reem Ayoub"
+# Enable comments by entering your Disqus shortname
+disqusShortname = ""
+# Enable Google Analytics by entering your tracking code
+googleAnalytics = ""
+theme = "hugo-sustain"
+
+[permalinks]
+  post = "/:year/:month/:day/:slug"
+
+[params]
+  avatar = "IMG_9055 2.jpg"
+  author = "Reem Ayoub"
+  description = "Hey Everyone, I'm Reem Ayoub a Neuroscience student at The University of Texas at Austin! Check out some of my projects, and my resume."
+
+  # Custom assets can be linked with their paths relative to static/
+  custom_css = []
+  custom_js  = []
+
+[params.social]
+  Github        = "reemayoub1"
+  Email         = "reemayoub17@gmail.com"
+
+## Main Menu
+[[menu.main]]
+  name = "blog"
+  weight = 100
+  identifier = "blog"
+  url = "/blog/"
+[[menu.main]]
+  name = "projects"
+  identifier = "projects"
+  weight = 200
+  url = "/projects/"
+

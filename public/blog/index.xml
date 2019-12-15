@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Blogs on Reem Ayoub</title>
+    <link>/reemayoub/blog/</link>
+    <description>Recent content in Blogs on Reem Ayoub</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-US</language>
+    <lastBuildDate>Sun, 15 Dec 2019 00:00:00 +0000</lastBuildDate>
+    
+	<atom:link href="/reemayoub/blog/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Python Exploration </title>
+      <link>/reemayoub/blog/python-exploration/</link>
+      <pubDate>Sun, 15 Dec 2019 00:00:00 +0000</pubDate>
+      
+      <guid>/reemayoub/blog/python-exploration/</guid>
+      <description> During this semester we got to experiment with the bio python functions on python. Having worked in neurology labs that analyze DNA sequences, I found these tools especially helpful to learn. One such function we experimented with was creating a dictionary containing 3mers in a DNA string.
+my_seq1 = &amp;quot;ATCATCATG&amp;quot; my_seq2 = &amp;quot;CAGCCCAATCAGGCTCTACTGCCACTAAACTTACGCAGGATATATTTACGCCGACGTACT&amp;quot; def kmer_count(seq, k): f = {} for x in range(len(seq)+1-k): kmer = seq[x:x+k] f[kmer] = f.get(kmer, 0) + 1 return(f) kmer_count(my_seq1,3)   </description>
+    </item>
+    
+  </channel>
+</rss>
